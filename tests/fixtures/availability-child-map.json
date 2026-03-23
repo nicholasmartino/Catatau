@@ -1,0 +1,11 @@
+{
+  "resourceAvailabilities": {
+    "20001": {
+      "resourceId": 20001,
+      "availability": 0,
+      "bookingCategoryId": 0,
+      "mapId": 1002
+    }
+  },
+  "mapLinkAvailabilities": {}
+}

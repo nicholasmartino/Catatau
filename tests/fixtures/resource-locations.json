@@ -1,0 +1,44 @@
+[
+  {
+    "resourceLocationId": 100,
+    "resourceLocationLocalizedValues": { "en": "Golden Ears Provincial Park" },
+    "mapId": 1001,
+    "regionId": 1,
+    "description": "Beautiful campground near Maple Ridge",
+    "hasAlerts": false,
+    "resourceCategoryIds": [-2147483648],
+    "parkAlerts": []
+  },
+  {
+    "resourceLocationId": 200,
+    "resourceLocationLocalizedValues": { "en": "Rathtrevor Beach Provincial Park" },
+    "mapId": 2001,
+    "regionId": 2,
+    "description": "Beachfront camping on Vancouver Island",
+    "hasAlerts": true,
+    "resourceCategoryIds": [-2147483648, -2147483643],
+    "parkAlerts": [
+      { "alertId": 1, "alertTitle": "Bear Warning", "alertDescription": "Active bears in area" }
+    ]
+  },
+  {
+    "resourceLocationId": 300,
+    "resourceLocationLocalizedValues": { "en": "Manning Provincial Park" },
+    "mapId": 3001,
+    "regionId": 3,
+    "description": "Mountain campground",
+    "hasAlerts": false,
+    "resourceCategoryIds": [-2147483648],
+    "parkAlerts": []
+  },
+  {
+    "resourceLocationId": 400,
+    "resourceLocationLocalizedValues": { "en": "Joffre Lakes Day Use Area" },
+    "mapId": 4001,
+    "regionId": 1,
+    "description": "Day use only - no camping",
+    "hasAlerts": false,
+    "resourceCategoryIds": [99],
+    "parkAlerts": []
+  }
+]

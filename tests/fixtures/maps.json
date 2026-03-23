@@ -1,0 +1,22 @@
+[
+  {
+    "mapId": 1001,
+    "localizedValues": { "en": "Golden Ears - Alouette" },
+    "mapLinks": [
+      {
+        "mapLinkId": 5001,
+        "parentMapId": 1001,
+        "childMapId": 1002,
+        "title": "Loop A",
+        "localizedValues": { "en": "Loop A" }
+      },
+      {
+        "mapLinkId": 5002,
+        "parentMapId": 1001,
+        "childMapId": 1003,
+        "title": "Loop B",
+        "localizedValues": { "en": "Loop B" }
+      }
+    ]
+  }
+]

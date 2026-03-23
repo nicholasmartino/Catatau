@@ -1,0 +1,29 @@
+{
+  "resourceAvailabilities": {
+    "10001": {
+      "resourceId": 10001,
+      "availability": 0,
+      "bookingCategoryId": 0,
+      "mapId": 1001
+    },
+    "10002": {
+      "resourceId": 10002,
+      "availability": 0,
+      "bookingCategoryId": 0,
+      "mapId": 1001
+    },
+    "10003": {
+      "resourceId": 10003,
+      "availability": 1,
+      "bookingCategoryId": 0,
+      "mapId": 1001
+    }
+  },
+  "mapLinkAvailabilities": {
+    "5001": {
+      "mapLinkId": 5001,
+      "availability": 0,
+      "childMapId": 1002
+    }
+  }
+}

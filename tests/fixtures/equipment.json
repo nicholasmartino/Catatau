@@ -1,0 +1,19 @@
+[
+  {
+    "equipmentCategoryId": -32768,
+    "localizedValues": { "en": "Tent/Vehicle" },
+    "subEquipmentCategories": [
+      { "subEquipmentCategoryId": 10, "localizedValues": { "en": "Small Tent" } },
+      { "subEquipmentCategoryId": 11, "localizedValues": { "en": "Large Tent" } },
+      { "subEquipmentCategoryId": 12, "localizedValues": { "en": "Van/Truck Camper" } }
+    ]
+  },
+  {
+    "equipmentCategoryId": -32767,
+    "localizedValues": { "en": "RV" },
+    "subEquipmentCategories": [
+      { "subEquipmentCategoryId": 20, "localizedValues": { "en": "Class A" } },
+      { "subEquipmentCategoryId": 21, "localizedValues": { "en": "Class C" } }
+    ]
+  }
+]
