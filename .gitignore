@@ -1,6 +1,35 @@
+# Claude Code / AI
+.claude/
+.claudeignore
+# Optional: if you want to keep logs local
+*.claude.log
+
+# Dependencies
 node_modules/
+/pnpm-lock.yaml
+/package-lock.json
+/yarn.lock
+
+# TypeScript/Build Output
 dist/
+build/
+*.tsbuildinfo
+
+# Environment Variables
 .env
-.session-cache.json
-*.log
+.env.local
+.env.*.local
+
+# IDE/Editor (VS Code)
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# IDE/Editor (IntelliJ)
+.idea/
+
+# OS Specific
 .DS_Store
+Thumbs.db
