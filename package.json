@@ -13,10 +13,12 @@
     "start": "node dist/index.js",
     "serve": "tsx src/index.ts serve",
     "snatch": "tsx src/index.ts snatch",
+    "telegram-bot": "tsx src/index.ts telegram-bot",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@opencode-ai/sdk": "^1.15.4",
     "chalk": "^5.4.1",
     "cli-table3": "^0.6.5",
     "commander": "^13.1.0",

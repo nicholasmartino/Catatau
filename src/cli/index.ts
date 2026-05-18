@@ -8,6 +8,7 @@ import { bookCommand } from "./commands/book.js";
 import { serveCommand } from "./commands/serve.js";
 import { snatchCommand } from "./commands/snatch.js";
 import { huntCommand } from "./commands/hunt.js";
+import { telegramBotCommand } from "./commands/telegram-bot.js";
 
 export function createCli(): Command {
   const program = new Command();
@@ -28,6 +29,7 @@ export function createCli(): Command {
   program.addCommand(serveCommand);
   program.addCommand(snatchCommand);
   program.addCommand(huntCommand);
+  program.addCommand(telegramBotCommand);
 
   return program;
 }

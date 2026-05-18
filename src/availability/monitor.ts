@@ -16,6 +16,7 @@ export interface MonitorOptions {
   intervalSeconds?: number;
   maxChecks?: number; // 0 = unlimited
   autoCart?: boolean; // auto-add to cart via Playwright
+  signal?: AbortSignal; // optional abort signal for cancellation
 }
 
 /**
@@ -33,9 +34,12 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
     intervalSeconds = config.monitorIntervalSeconds,
     maxChecks = 0,
     autoCart = config.autoCartEnabled,
+    signal,
   } = options;
 
   const notifier = new NotificationManager();
+
+  if (signal?.aborted) return;
 
   // Resolve campgrounds once
   const campgrounds = await findCampgrounds(parkName);
@@ -60,6 +64,10 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
   let checkCount = 0;
 
   while (maxChecks === 0 || checkCount < maxChecks) {
+    if (signal?.aborted) {
+      logger.info("Monitor aborted by signal");
+      break;
+    }
     checkCount++;
     logger.info(
       "Check #%d at %s",

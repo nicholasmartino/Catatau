@@ -45,6 +45,11 @@ export const configSchema = z.object({
   defaultEquipmentCategoryId: z.coerce
     .number()
     .default(-32768),
+
+  opencodeApiUrl: z
+    .string()
+    .url()
+    .default("http://localhost:4096"),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
