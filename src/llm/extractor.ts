@@ -1,14 +1,21 @@
-import { loadConfig } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import type { ExtractedIntent } from "./types.js";
 
-const SYSTEM_PROMPT = `You are a camping reservation assistant for BC Parks. Extract booking intent from the user's natural language request.
+const SYSTEM_PROMPT = `You are a camping reservation assistant for BC Parks. Help the user plan their trip by having a natural conversation.
 
-Available commands:
-- "hunt" = continuous monitoring with auto-cart, fast interval (30s)
-- "monitor" = continuous monitoring without auto-cart, standard interval (300s)
-- "check" = single availability check
-- "snatch" = pre-warmed booking at 7 AM release
+For EVERY response, output:
+- \`reply\` (REQUIRED): A natural conversational message to send back to the user.
+- Booking fields (optional): Fill these ONLY when the user clearly states specific values.
+
+Collect these through conversation:
+1. Park or campground name
+2. Check-in date
+3. Check-out date
+4. Number of people
+
+If the user mentions a region (like "Sunshine Coast") instead of a specific park, suggest real reservable BC Parks campgrounds in that area in your reply. Do NOT set the park field for a region name.
+If the user asks an open-ended question, ask follow-ups to narrow it down.
+Be helpful, natural, and specific. Do NOT guess or make up park names, dates, or party sizes.
 
 Parse dates intelligently:
 - "june 1" or "June 1st" -> 2026-06-01
@@ -23,6 +30,10 @@ Dates like "june 1 to june 3" mean start=june 1, end=june 3.`;
 const INTENT_SCHEMA = {
   type: "object",
   properties: {
+    reply: {
+      type: "string",
+      description: "Natural conversational reply to send to the user. REQUIRED.",
+    },
     park: { type: "string", description: "Park or campground name" },
     startDate: {
       type: "string",
@@ -36,7 +47,7 @@ const INTENT_SCHEMA = {
       description: "Check interval in seconds (leave null for defaults)",
     },
   },
-  required: ["park"],
+  required: ["reply"],
 };
 
 async function apiFetch(
@@ -61,9 +72,36 @@ async function apiFetch(
   return response.json();
 }
 
-export async function extractIntent(text: string): Promise<ExtractedIntent> {
-  const config = loadConfig();
-  const apiUrl = config.opencodeApiUrl;
+export async function extractIntent(
+  text: string,
+  apiUrl: string,
+  context?: { existingIntent: Partial<ExtractedIntent>; command: string },
+): Promise<ExtractedIntent> {
+  let system = SYSTEM_PROMPT;
+
+  if (context) {
+    const known = context.existingIntent;
+    const fields: string[] = [];
+    if (context.command) fields.push(`Command: ${context.command}`);
+    if (known.park) fields.push(`Park: ${known.park}`);
+    if (known.startDate) fields.push(`Start date: ${known.startDate}`);
+    if (known.endDate) fields.push(`End date: ${known.endDate}`);
+    if (known.partySize !== undefined) fields.push(`Party size: ${known.partySize}`);
+
+    system += [
+      "",
+      "",
+      "Previously collected information (do NOT repeat in your output):",
+      ...(fields.length > 0 ? fields.map(f => `- ${f}`) : ["- (none yet)"]),
+      "",
+      "Extract new booking fields from the user's latest message.",
+      "Do NOT output any of the fields listed above.",
+      "If a date is provided and the corresponding field is already collected,",
+      "interpret it as the next missing date field.",
+      "If the user's message doesn't contain new booking information,",
+      "respond conversationally in the reply field instead.",
+    ].join("\n");
+  }
 
   const session = await apiFetch(apiUrl, "/session", {
     method: "POST",
@@ -74,15 +112,23 @@ export async function extractIntent(text: string): Promise<ExtractedIntent> {
     const result = await apiFetch(apiUrl, `/session/${session.id}/message`, {
       method: "POST",
       body: JSON.stringify({
-        system: SYSTEM_PROMPT,
+        system,
         parts: [{ type: "text", text }],
         format: { type: "json_schema", schema: INTENT_SCHEMA },
       }),
-    }) as { info: { structured?: Record<string, unknown> } };
+    }) as { info: { structured?: Record<string, unknown> }; parts: Array<{ type: string; text?: string }> };
 
     const structured = result.info.structured as ExtractedIntent | undefined;
-    logger.info({ structured }, "Extracted intent");
-    return structured ?? {};
+    const textPart = result.parts?.find(p => p.type === "text");
+    const replyFromText = textPart?.text;
+
+    let intent: ExtractedIntent = structured ?? {};
+    if (!intent.reply && replyFromText) {
+      intent = { ...intent, reply: replyFromText };
+    }
+
+    logger.info({ intent }, "Extracted intent");
+    return intent;
   } finally {
     await apiFetch(apiUrl, `/session/${session.id}`, {
       method: "DELETE",

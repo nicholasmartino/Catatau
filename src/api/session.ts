@@ -24,26 +24,32 @@ interface SessionCache {
 export async function getSession(
   ttlMinutes: number = 30,
 ): Promise<{ cookies: string; userAgent: string }> {
-  // Try loading cached session
   if (existsSync(SESSION_CACHE_PATH)) {
-    try {
-      const cached: SessionCache = JSON.parse(
-        await readFile(SESSION_CACHE_PATH, "utf-8"),
-      );
-      const ageMinutes = (Date.now() - cached.timestamp) / 60000;
-      if (ageMinutes < ttlMinutes) {
-        logger.debug(`Using cached session (${ageMinutes.toFixed(1)} min old)`);
-        const cookieStr = cached.cookies
-          .map((c) => `${c.name}=${c.value}`)
-          .join("; ");
-        return { cookies: cookieStr, userAgent: cached.userAgent };
-      }
-    } catch {
-      logger.debug("Invalid session cache, will refresh");
-    }
+    const cached = await getBypassCookies();
+    if (cached) return cached;
   }
 
   return refreshSession();
+}
+
+async function getBypassCookies(): Promise<{ cookies: string; userAgent: string } | null> {
+  try {
+    const cached: SessionCache = JSON.parse(
+      await readFile(SESSION_CACHE_PATH, "utf-8"),
+    );
+    const config = (await import("../config/index.js")).loadConfig();
+    const ageMinutes = (Date.now() - cached.timestamp) / 60000;
+    if (ageMinutes < config.sessionCacheTtlMinutes) {
+      logger.debug(`Using cached session (${ageMinutes.toFixed(1)} min old)`);
+      const cookieStr = cached.cookies
+        .map((c) => `${c.name}=${c.value}`)
+        .join("; ");
+      return { cookies: cookieStr, userAgent: cached.userAgent };
+    }
+  } catch {
+    logger.debug("Invalid session cache, will refresh");
+  }
+  return null;
 }
 
 export async function refreshSession(): Promise<{
@@ -54,27 +60,54 @@ export async function refreshSession(): Promise<{
 
   let browser: Browser | null = null;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: false,
+      args: ["--disable-blink-features=AutomationControlled"],
+    });
+
     const context: BrowserContext = await browser.newContext({
       locale: "en-US",
       timezoneId: "America/Vancouver",
+      viewport: { width: 1920, height: 1080 },
     });
 
     const page = await context.newPage();
-
-    // Visit the main site to get cookies set
-    await page.goto(BCPARKS_BASE_URL, {
-      waitUntil: "networkidle",
-      timeout: 30000,
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });
 
-    // Wait a moment for any JS-set cookies
+    await page.goto(BCPARKS_BASE_URL, {
+      waitUntil: "networkidle",
+      timeout: 60000,
+    });
+
+    await page.waitForTimeout(3000);
+
+    try {
+      await page.waitForSelector("#root, .app, main", { timeout: 15000 });
+    } catch {
+      logger.warn("Page root element not found after load");
+    }
+
     await page.waitForTimeout(2000);
+
+    try {
+      const resp = await page.goto(
+        `${BCPARKS_BASE_URL}/api/resourceLocation`,
+        { waitUntil: "domcontentloaded", timeout: 15000 },
+      );
+      if (resp?.status() === 200) {
+        logger.info("API endpoint accessible after session bootstrap");
+      } else {
+        logger.warn("API endpoint status: %d", resp?.status() ?? -1);
+      }
+    } catch (error) {
+      logger.warn("API endpoint navigation failed: %s", error);
+    }
 
     const cookies = await context.cookies();
     const userAgent = await page.evaluate(() => navigator.userAgent);
 
-    // Cache the session
     const cache: SessionCache = {
       cookies: cookies.map((c) => ({
         name: c.name,

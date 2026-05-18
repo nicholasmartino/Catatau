@@ -4,20 +4,13 @@ import { z } from "zod";
 
 export const resourceLocationSchema = z.object({
   resourceLocationId: z.number(),
-  resourceLocationLocalizedValues: z.object({
-    en: z.string(),
-    fr: z.string().optional(),
-  }),
-  mapId: z.number(),
-  regionId: z.number(),
-  description: z.string().default(""),
-  hasAlerts: z.boolean().default(false),
+  rootMapId: z.number(),
+  localizedValues: z.array(z.object({
+    cultureName: z.string(),
+    shortName: z.string(),
+    fullName: z.string(),
+  })),
   resourceCategoryIds: z.array(z.number()).default([]),
-  parkAlerts: z.array(z.object({
-    alertId: z.number(),
-    alertTitle: z.string(),
-    alertDescription: z.string(),
-  })).default([]),
 });
 
 export const campgroundMapSchema = z.object({

@@ -1,44 +1,26 @@
 [
   {
     "resourceLocationId": 100,
-    "resourceLocationLocalizedValues": { "en": "Golden Ears Provincial Park" },
-    "mapId": 1001,
-    "regionId": 1,
-    "description": "Beautiful campground near Maple Ridge",
-    "hasAlerts": false,
-    "resourceCategoryIds": [-2147483648],
-    "parkAlerts": []
+    "rootMapId": 1001,
+    "localizedValues": [{ "cultureName": "en-CA", "shortName": "Golden Ears Provincial Park", "fullName": "Golden Ears Provincial Park" }],
+    "resourceCategoryIds": [-2147483648]
   },
   {
     "resourceLocationId": 200,
-    "resourceLocationLocalizedValues": { "en": "Rathtrevor Beach Provincial Park" },
-    "mapId": 2001,
-    "regionId": 2,
-    "description": "Beachfront camping on Vancouver Island",
-    "hasAlerts": true,
-    "resourceCategoryIds": [-2147483648, -2147483643],
-    "parkAlerts": [
-      { "alertId": 1, "alertTitle": "Bear Warning", "alertDescription": "Active bears in area" }
-    ]
+    "rootMapId": 2001,
+    "localizedValues": [{ "cultureName": "en-CA", "shortName": "Rathtrevor Beach Provincial Park", "fullName": "Rathtrevor Beach Provincial Park" }],
+    "resourceCategoryIds": [-2147483648, -2147483643]
   },
   {
     "resourceLocationId": 300,
-    "resourceLocationLocalizedValues": { "en": "Manning Provincial Park" },
-    "mapId": 3001,
-    "regionId": 3,
-    "description": "Mountain campground",
-    "hasAlerts": false,
-    "resourceCategoryIds": [-2147483648],
-    "parkAlerts": []
+    "rootMapId": 3001,
+    "localizedValues": [{ "cultureName": "en-CA", "shortName": "Manning Provincial Park", "fullName": "Manning Provincial Park" }],
+    "resourceCategoryIds": [-2147483648]
   },
   {
     "resourceLocationId": 400,
-    "resourceLocationLocalizedValues": { "en": "Joffre Lakes Day Use Area" },
-    "mapId": 4001,
-    "regionId": 1,
-    "description": "Day use only - no camping",
-    "hasAlerts": false,
-    "resourceCategoryIds": [99],
-    "parkAlerts": []
+    "rootMapId": 4001,
+    "localizedValues": [{ "cultureName": "en-CA", "shortName": "Joffre Lakes Day Use Area", "fullName": "Joffre Lakes Day Use Area" }],
+    "resourceCategoryIds": [99]
   }
 ]

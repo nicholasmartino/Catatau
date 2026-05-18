@@ -17,6 +17,10 @@ import type {
 } from "../types/availability.js";
 import type { Campground } from "../types/park.js";
 
+function getEnglishName(loc: { localizedValues: Array<{ cultureName: string; shortName: string }> }): string {
+  return loc.localizedValues.find((lv) => lv.cultureName === "en-CA")?.shortName ?? "Unknown";
+}
+
 /**
  * Find campgrounds matching a search term.
  */
@@ -28,7 +32,7 @@ export async function findCampgrounds(
 
   return locations
     .filter((loc) => {
-      const name = loc.resourceLocationLocalizedValues.en.toLowerCase();
+      const name = getEnglishName(loc).toLowerCase();
       return name.includes(term);
     })
     .filter((loc) =>
@@ -36,11 +40,11 @@ export async function findCampgrounds(
     )
     .map((loc) => ({
       id: loc.resourceLocationId,
-      name: loc.resourceLocationLocalizedValues.en,
-      mapId: loc.mapId,
-      regionId: loc.regionId,
+      name: getEnglishName(loc),
+      mapId: loc.rootMapId,
+      regionId: 0,
       resourceCategoryIds: loc.resourceCategoryIds,
-      hasAlerts: loc.hasAlerts,
+      hasAlerts: false,
     }));
 }
 
@@ -56,11 +60,11 @@ export async function listAllCampgrounds(): Promise<Campground[]> {
     )
     .map((loc) => ({
       id: loc.resourceLocationId,
-      name: loc.resourceLocationLocalizedValues.en,
-      mapId: loc.mapId,
-      regionId: loc.regionId,
+      name: getEnglishName(loc),
+      mapId: loc.rootMapId,
+      regionId: 0,
       resourceCategoryIds: loc.resourceCategoryIds,
-      hasAlerts: loc.hasAlerts,
+      hasAlerts: false,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

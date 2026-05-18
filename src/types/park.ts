@@ -1,30 +1,24 @@
+export interface LocalizedValue {
+  cultureName: string;
+  shortName: string;
+  fullName: string;
+}
+
 export interface ResourceLocation {
   resourceLocationId: number;
-  resourceLocationLocalizedValues: LocalizedValues;
-  mapId: number;
-  regionId: number;
-  description: string;
-  hasAlerts: boolean;
+  rootMapId: number;
+  localizedValues: LocalizedValue[];
   resourceCategoryIds: number[];
-  parkAlerts: ParkAlert[];
-}
-
-export interface LocalizedValues {
-  en: string;
-  fr?: string;
-}
-
-export interface ParkAlert {
-  alertId: number;
-  alertTitle: string;
-  alertDescription: string;
 }
 
 export interface CampgroundMap {
   mapId: number;
   mapName: string;
   resourceLocationId: number;
-  localizedValues: LocalizedValues;
+  localizedValues: {
+    en: string;
+    fr?: string;
+  };
   mapLinks: MapLink[];
 }
 
@@ -33,7 +27,10 @@ export interface MapLink {
   parentMapId: number;
   childMapId: number;
   title: string;
-  localizedValues: LocalizedValues;
+  localizedValues: {
+    en: string;
+    fr?: string;
+  };
 }
 
 export interface Campground {

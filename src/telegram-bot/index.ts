@@ -1,16 +1,19 @@
+import { createOpencodeServer } from "@opencode-ai/sdk/server";
 import { loadConfig } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import { sleep } from "../utils/sleep.js";
-import { extractIntent } from "../llm/extractor.js";
 import { startMonitor } from "../availability/monitor.js";
-import { checkAvailability, findCampgrounds } from "../availability/checker.js";
-import { parseDate, formatDate } from "../utils/dates.js";
+import { checkAvailability, findCampgrounds, listAllCampgrounds } from "../availability/checker.js";
+import { parseDate } from "../utils/dates.js";
+import { ConversationManager } from "./conversation.js";
 import type { ExtractedIntent } from "../llm/types.js";
+import type { ProcessMessageResult } from "./conversation.js";
 
 const TELEGRAM_API = "https://api.telegram.org";
 
 let currentAbortController: AbortController | null = null;
 let currentOperation: string | null = null;
+const conversationManager = new ConversationManager();
 
 interface TelegramUpdate {
   update_id: number;
@@ -20,6 +23,13 @@ interface TelegramUpdate {
     text?: string;
     from?: { id: number; is_bot?: boolean };
   };
+}
+
+const TELEGRAM_MAX_LENGTH = 4096;
+
+function truncateTelegram(text: string): string {
+  if (text.length <= TELEGRAM_MAX_LENGTH) return text;
+  return text.slice(0, TELEGRAM_MAX_LENGTH - 30) + "\n\n... (truncated)";
 }
 
 async function sendMessage(chatId: number, text: string): Promise<void> {
@@ -33,7 +43,7 @@ async function sendMessage(chatId: number, text: string): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
-        text,
+        text: truncateTelegram(text),
         parse_mode: "Markdown",
         disable_web_page_preview: false,
       }),
@@ -71,6 +81,44 @@ async function handleStop(chatId: number): Promise<void> {
   }
 }
 
+async function handleList(chatId: number): Promise<void> {
+  await sendMessage(chatId, "Fetching available campgrounds...");
+  try {
+    const campgrounds = await listAllCampgrounds();
+    const parkNames = campgrounds.map(c => `• ${c.name}`);
+    const total = parkNames.length;
+
+    const header = `*BC Parks Campgrounds (${total} total)*\n`;
+    const maxLen = 4000;
+
+    if (total === 0) {
+      await sendMessage(chatId, "No reservable campgrounds found.");
+      return;
+    }
+
+    const chunks: string[] = [];
+    let current = header;
+    for (const line of parkNames) {
+      if ((current + "\n" + line).length > maxLen) {
+        chunks.push(current);
+        current = header + line;
+      } else {
+        current += "\n" + line;
+      }
+    }
+    chunks.push(current);
+
+    for (const chunk of chunks) {
+      await sendMessage(chatId, chunk);
+    }
+  } catch (error) {
+    await sendMessage(
+      chatId,
+      `Error fetching campground list: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 async function handleStatus(chatId: number): Promise<void> {
   if (currentOperation) {
     await sendMessage(chatId, `*Active operation:*\n${currentOperation}`);
@@ -94,6 +142,7 @@ async function handleHelp(chatId: number): Promise<void> {
       "`/check <description>` - Single availability check",
       "  *Example:* `/check rathtrevor beach aug 5 to aug 7`",
       "",
+      "`/list` - List all reservable campgrounds",
       "`/stop` - Cancel current operation",
       "`/status` - Show current operation",
       "`/help` - Show this message",
@@ -101,16 +150,58 @@ async function handleHelp(chatId: number): Promise<void> {
   );
 }
 
+async function handleConversationResult(
+  chatId: number,
+  result: ProcessMessageResult,
+): Promise<void> {
+  switch (result.action) {
+    case "execute":
+      if (!result.intent) {
+        await sendMessage(chatId, "Something went wrong. Try again.");
+        return;
+      }
+      switch (result.command) {
+        case "hunt":
+          await executeHunt(chatId, result.intent);
+          break;
+        case "monitor":
+          await executeMonitor(chatId, result.intent);
+          break;
+        case "check":
+          await executeCheck(chatId, result.intent);
+          break;
+      }
+      break;
+    case "ask":
+      if (result.question) await sendMessage(chatId, result.question);
+      break;
+    case "expired":
+      await sendMessage(
+        chatId,
+        "Your previous request expired. Send a new command to start again.",
+      );
+      break;
+  }
+}
+
 async function handleCommandMessage(
   chatId: number,
   text: string,
+  apiUrl: string,
 ): Promise<void> {
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
 
-  if (lower === "/stop") return handleStop(chatId);
+  if (lower === "/stop") {
+    conversationManager.delete(chatId);
+    return handleStop(chatId);
+  }
   if (lower === "/status") return handleStatus(chatId);
   if (lower === "/help" || lower === "/start") return handleHelp(chatId);
+  if (lower === "/list") {
+    conversationManager.delete(chatId);
+    return handleList(chatId);
+  }
 
   let command: string | null = null;
   let args = "";
@@ -122,69 +213,62 @@ async function handleCommandMessage(
     }
   }
 
-  if (!command) {
-    await sendMessage(
-      chatId,
-      "Unknown command. Send `/help` to see available commands.",
-    );
-    return;
-  }
-
-  if (!args) {
-    await sendMessage(
-      chatId,
-      `Please describe what you want after the command.\n*Example:* \`/${command} golden ears june 1 to june 3\``,
-    );
-    return;
-  }
-
-  await sendMessage(chatId, "Understanding your request...");
-  let intent: ExtractedIntent;
-  try {
-    intent = await extractIntent(args);
-  } catch (error) {
-    await sendMessage(
-      chatId,
-      `Sorry, I couldn't understand that request.\nError: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return;
-  }
-
-  if (!intent.park) {
-    await sendMessage(
-      chatId,
-      "I couldn't identify a park name in your message. Please try again with a park name.",
-    );
-    return;
-  }
-
-  if (command === "hunt" || command === "monitor" || command === "check") {
-    if (!intent.startDate || !intent.endDate) {
-      await sendMessage(
-        chatId,
-        "I couldn't determine the dates. Please include start and end dates.\n*Example:* `june 1 to june 3`",
-      );
-      return;
-    }
-  }
-
-  switch (command) {
-    case "hunt":
-      await executeHunt(chatId, intent);
-      break;
-    case "monitor":
-      await executeMonitor(chatId, intent);
-      break;
-    case "check":
-      await executeCheck(chatId, intent);
-      break;
-    case "snatch":
+  if (command) {
+    if (command === "snatch") {
       await sendMessage(
         chatId,
         "Snatch mode is not yet supported via Telegram bot.",
       );
-      break;
+      return;
+    }
+
+    conversationManager.start(chatId, command);
+
+    if (!args) {
+      const question = conversationManager.getQuestion(chatId);
+      if (question) await sendMessage(chatId, question);
+      return;
+    }
+
+    await sendMessage(chatId, "Let me process that...");
+    try {
+      const result = await conversationManager.processMessage(
+        chatId,
+        args,
+        apiUrl,
+      );
+      await handleConversationResult(chatId, result);
+    } catch (error) {
+      await sendMessage(
+        chatId,
+        `Sorry, I couldn't understand that.\n${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return;
   }
+
+  if (conversationManager.has(chatId)) {
+    await sendMessage(chatId, "Let me process that...");
+    try {
+      const result = await conversationManager.processMessage(
+        chatId,
+        trimmed,
+        apiUrl,
+      );
+      await handleConversationResult(chatId, result);
+    } catch (error) {
+      await sendMessage(
+        chatId,
+        `Sorry, I couldn't understand that.\n${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return;
+  }
+
+  await sendMessage(
+    chatId,
+    "Unknown command. Send /help to see available commands.",
+  );
 }
 
 async function executeHunt(
@@ -375,7 +459,39 @@ export async function startTelegramBot(): Promise<void> {
     return;
   }
 
-  logger.info("Starting Telegram bot...");
+  let opencodeUrl: string;
+  let opencodeServer: { close(): void } | null = null;
+
+  if (config.opencodeApiUrl) {
+    opencodeUrl = config.opencodeApiUrl;
+    logger.info("Connecting to opencode server at %s", opencodeUrl);
+  } else {
+    logger.info("Starting embedded opencode server...");
+    try {
+      const server = await createOpencodeServer({ port: 0 });
+      opencodeServer = server;
+      opencodeUrl = server.url;
+      logger.info("Opencode server running at %s", opencodeUrl);
+    } catch (error) {
+      logger.error(
+        error instanceof Error ? error : new Error(String(error)),
+        "Failed to start opencode server",
+      );
+      return;
+    }
+  }
+
+  const shutdown = () => {
+    logger.info("Shutting down...");
+    if (currentAbortController) currentAbortController.abort();
+    opencodeServer?.close();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
+  logger.info("Telegram bot started. Waiting for messages...");
   let offset = 0;
 
   while (true) {
@@ -391,7 +507,7 @@ export async function startTelegramBot(): Promise<void> {
         }
 
         logger.info("Received message: %s", msg.text);
-        await handleCommandMessage(msg.chat.id, msg.text);
+        await handleCommandMessage(msg.chat.id, msg.text, opencodeUrl);
       }
     } catch (error) {
       logger.error(error instanceof Error ? error : new Error(String(error)));

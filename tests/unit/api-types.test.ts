@@ -19,7 +19,7 @@ describe("API response schema validation", () => {
       const result = z.array(resourceLocationSchema).parse(resourceLocationsFixture);
       expect(result).toHaveLength(4);
       expect(result[0].resourceLocationId).toBe(100);
-      expect(result[0].resourceLocationLocalizedValues.en).toBe(
+      expect(result[0].localizedValues[0].shortName).toBe(
         "Golden Ears Provincial Park",
       );
     });
@@ -27,15 +27,11 @@ describe("API response schema validation", () => {
     it("applies defaults for missing optional fields", () => {
       const minimal = {
         resourceLocationId: 999,
-        resourceLocationLocalizedValues: { en: "Test Park" },
-        mapId: 9999,
-        regionId: 1,
+        rootMapId: 9999,
+        localizedValues: [{ cultureName: "en-CA", shortName: "Test Park", fullName: "Test Park" }],
       };
       const result = resourceLocationSchema.parse(minimal);
-      expect(result.description).toBe("");
-      expect(result.hasAlerts).toBe(false);
       expect(result.resourceCategoryIds).toEqual([]);
-      expect(result.parkAlerts).toEqual([]);
     });
 
     it("rejects invalid data", () => {
