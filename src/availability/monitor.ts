@@ -4,6 +4,7 @@ import { loadConfig } from "../config/index.js";
 import { formatDate } from "../utils/dates.js";
 import { sleep } from "../utils/sleep.js";
 import { logger } from "../utils/logger.js";
+import { automateBooking } from "../booking/playwright-booker.js";
 import type { AvailableSite } from "../types/availability.js";
 import type { Campground } from "../types/park.js";
 
@@ -14,11 +15,13 @@ export interface MonitorOptions {
   partySize?: number;
   intervalSeconds?: number;
   maxChecks?: number; // 0 = unlimited
+  autoCart?: boolean; // auto-add to cart via Playwright
 }
 
 /**
  * Continuously monitor availability and notify on changes.
  * Tracks previously-seen sites to only alert on *new* availability.
+ * When autoCart is enabled, launches Playwright to auto-add to cart.
  */
 export async function startMonitor(options: MonitorOptions): Promise<void> {
   const config = loadConfig();
@@ -29,6 +32,7 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
     partySize = config.defaultPartySize,
     intervalSeconds = config.monitorIntervalSeconds,
     maxChecks = 0,
+    autoCart = config.autoCartEnabled,
   } = options;
 
   const notifier = new NotificationManager();
@@ -41,15 +45,17 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
   }
 
   logger.info(
-    "Monitoring %d campgrounds for %s to %s (every %ds)",
+    "Monitoring %d campgrounds for %s to %s (every %ds, auto-cart=%s)",
     campgrounds.length,
     formatDate(startDate),
     formatDate(endDate),
     intervalSeconds,
+    autoCart ? "yes" : "no",
   );
 
   // Track previously seen available site IDs per campground
   const previousSites = new Map<number, Set<number>>();
+  let cartLaunched = false;
 
   let checkCount = 0;
 
@@ -80,7 +86,6 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
             campground.name,
           );
 
-          // Get unique booking URLs
           const bookingUrls = [
             ...new Set(newSites.map((s) => s.bookingUrl)),
           ];
@@ -94,6 +99,30 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
             startDate: formatDate(startDate),
             endDate: formatDate(endDate),
           });
+
+          // Auto-add to cart via Playwright if enabled and not already launched
+          if (autoCart && !cartLaunched && bookingUrls.length > 0) {
+            cartLaunched = true;
+            logger.info("Auto-cart: launching Playwright to add site to cart...");
+            const result = await automateBooking({
+              bookingUrl: bookingUrls[0],
+              headless: config.autoCartHeadless,
+            });
+
+            await notifier.notify({
+              title: result.success
+                ? `✅ Site added to cart at ${campground.name}!`
+                : `❌ Auto-cart failed at ${campground.name}`,
+              message: result.success
+                ? `Site added to cart! Complete payment within 15 minutes.\n${bookingUrls[0]}`
+                : `Could not auto-add: ${result.message}`,
+              sites: newSites,
+              bookingUrls,
+              parkName: campground.name,
+              startDate: formatDate(startDate),
+              endDate: formatDate(endDate),
+            });
+          }
         } else if (sites.length > 0) {
           logger.info(
             "%d sites still available at %s (no new ones)",
@@ -115,6 +144,10 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
           "Error checking campground",
         );
       }
+    }
+
+    if (cartLaunched) {
+      logger.info("Auto-cart launched. Monitor will continue watching for more sites.");
     }
 
     if (maxChecks !== 0 && checkCount >= maxChecks) break;

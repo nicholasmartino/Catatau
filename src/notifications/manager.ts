@@ -5,17 +5,18 @@ import type {
 import { ConsoleNotifier } from "./console.js";
 import { EmailNotifier } from "./email.js";
 import { DiscordWebhookNotifier, SlackWebhookNotifier } from "./webhook.js";
+import { TelegramNotifier } from "./telegram.js";
 import { logger } from "../utils/logger.js";
 
 export class NotificationManager {
   private providers: NotificationProvider[] = [];
 
   constructor() {
-    // Register all providers; only configured ones will fire
     this.providers.push(new ConsoleNotifier());
     this.providers.push(new EmailNotifier());
     this.providers.push(new DiscordWebhookNotifier());
     this.providers.push(new SlackWebhookNotifier());
+    this.providers.push(new TelegramNotifier());
   }
 
   async notify(payload: NotificationPayload): Promise<void> {

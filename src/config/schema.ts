@@ -24,6 +24,18 @@ export const configSchema = z.object({
   discordWebhookUrl: z.string().url().optional().or(z.literal("")),
   slackWebhookUrl: z.string().url().optional().or(z.literal("")),
 
+  telegramBotToken: z.string().optional(),
+  telegramChatId: z.string().optional(),
+
+  autoCartEnabled: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .default("true"),
+  autoCartHeadless: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .default("false"),
+
   bookingHeadless: z
     .enum(["true", "false"])
     .transform((v) => v === "true")
