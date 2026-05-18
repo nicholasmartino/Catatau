@@ -15,19 +15,18 @@ export const resourceLocationSchema = z.object({
 
 export const campgroundMapSchema = z.object({
   mapId: z.number(),
-  localizedValues: z.object({
-    en: z.string(),
-    fr: z.string().optional(),
-  }).optional(),
+  localizedValues: z.array(z.object({
+    cultureName: z.string(),
+    title: z.string(),
+  })).default([]),
   mapLinks: z.array(z.object({
-    mapLinkId: z.number(),
-    parentMapId: z.number(),
-    childMapId: z.number(),
-    title: z.string().default(""),
-    localizedValues: z.object({
-      en: z.string(),
-      fr: z.string().optional(),
-    }).optional(),
+    resourceLocationId: z.number(),
+    transactionLocationId: z.number(),
+    childMapId: z.number().optional(),
+    localizations: z.array(z.object({
+      cultureName: z.string(),
+      title: z.string(),
+    })).default([]),
   })).default([]),
 });
 

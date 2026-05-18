@@ -13,24 +13,15 @@ export interface ResourceLocation {
 
 export interface CampgroundMap {
   mapId: number;
-  mapName: string;
-  resourceLocationId: number;
-  localizedValues: {
-    en: string;
-    fr?: string;
-  };
+  localizedValues: Array<{ cultureName: string; title: string }>;
   mapLinks: MapLink[];
 }
 
 export interface MapLink {
-  mapLinkId: number;
-  parentMapId: number;
-  childMapId: number;
-  title: string;
-  localizedValues: {
-    en: string;
-    fr?: string;
-  };
+  resourceLocationId: number;
+  transactionLocationId: number;
+  childMapId?: number;
+  localizations: Array<{ cultureName: string; title: string }>;
 }
 
 export interface Campground {

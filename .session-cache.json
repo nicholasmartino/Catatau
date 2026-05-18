@@ -1,0 +1,48 @@
+{
+  "cookies": [
+    {
+      "name": "ai_user",
+      "value": "A1TLzoRlqFthtVB4i3xRFP|2026-05-18T19:12:05.412Z",
+      "domain": "camping.bcparks.ca",
+      "path": "/"
+    },
+    {
+      "name": ".AspNetCore.Antiforgery.3YREhQdkuHQ",
+      "value": "CfDJ8HeE30xmy0JFnwfnU24QZnYSuYR3in8cESXCZmvk_pdfwGk-aXv4a1GNA4QhAN5bDUKx84B6_w2g5KAXHiTkDqeczAuiooxL6Q5SYg3T5jafXk28uMjQ_7Vl8XnAA3J0fcTVIUHJ-MYJS7HNq3q_tlU",
+      "domain": "camping.bcparks.ca",
+      "path": "/"
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.1742945080.1779131527",
+      "domain": ".bcparks.ca",
+      "path": "/"
+    },
+    {
+      "name": "ai_session",
+      "value": "e7mt/P77FJlG1cF5OJYcHj|1779131530653|1779131530653",
+      "domain": "camping.bcparks.ca",
+      "path": "/"
+    },
+    {
+      "name": "XSRF-TOKEN",
+      "value": "CfDJ8HeE30xmy0JFnwfnU24QZnaGDFfbrse6NnT3VQiaKxTPd9wlC5U25fprKs4Cwk8HlYODW7v1Zu6UeHjOpvb-fGIR0p2cEcbofQrDapAFDSJ8vd6yc7De_QE-F97rHiiMLDEkL5wWGcZzuLM_n_TjvqY",
+      "domain": "camping.bcparks.ca",
+      "path": "/"
+    },
+    {
+      "name": "_ga_Y2BBPF0MFM",
+      "value": "GS2.1.s1779131526$o1$g1$t1779131538$j48$l0$h0",
+      "domain": ".bcparks.ca",
+      "path": "/"
+    },
+    {
+      "name": "_ga_EPR2TFPWYE",
+      "value": "GS2.1.s1779131528$o1$g1$t1779131538$j50$l0$h0",
+      "domain": ".bcparks.ca",
+      "path": "/"
+    }
+  ],
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+  "timestamp": 1779131539117
+}

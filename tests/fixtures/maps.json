@@ -1,21 +1,19 @@
 [
   {
     "mapId": 1001,
-    "localizedValues": { "en": "Golden Ears - Alouette" },
+    "localizedValues": [{ "cultureName": "en-CA", "title": "Golden Ears - Alouette" }],
     "mapLinks": [
       {
-        "mapLinkId": 5001,
-        "parentMapId": 1001,
+        "resourceLocationId": 100,
+        "transactionLocationId": 5001,
         "childMapId": 1002,
-        "title": "Loop A",
-        "localizedValues": { "en": "Loop A" }
+        "localizations": [{ "cultureName": "en-CA", "title": "Loop A" }]
       },
       {
-        "mapLinkId": 5002,
-        "parentMapId": 1001,
+        "resourceLocationId": 100,
+        "transactionLocationId": 5002,
         "childMapId": 1003,
-        "title": "Loop B",
-        "localizedValues": { "en": "Loop B" }
+        "localizations": [{ "cultureName": "en-CA", "title": "Loop B" }]
       }
     ]
   }
