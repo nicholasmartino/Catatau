@@ -1,6 +1,7 @@
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import { readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
+import path from "path";
 import { logger } from "../utils/logger.js";
 import { BCPARKS_BASE_URL } from "../config/constants.js";
 
@@ -63,7 +64,13 @@ export async function refreshSession(): Promise<{
     browser = await chromium.launch({
       headless: false,
       channel: "chrome",
-      args: ["--disable-blink-features=AutomationControlled"],
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--no-first-run",
+        "--no-default-browser-check",
+        `--user-data-dir=${path.join(process.cwd(), ".chrome-profile")}`,
+      ],
+      ignoreDefaultArgs: ["--enable-automation"],
     });
 
     const context: BrowserContext = await browser.newContext({

@@ -33,3 +33,6 @@ build/
 # OS Specific
 .DS_Store
 Thumbs.db
+
+# Chrome profile for WAF bypass
+.chrome-profile/
