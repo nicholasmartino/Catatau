@@ -62,6 +62,7 @@ export async function refreshSession(): Promise<{
   try {
     browser = await chromium.launch({
       headless: false,
+      channel: "chrome",
       args: ["--disable-blink-features=AutomationControlled"],
     });
 
@@ -87,6 +88,7 @@ export async function refreshSession(): Promise<{
       await page.waitForSelector("#root, .app, main", { timeout: 15000 });
     } catch {
       logger.warn("Page root element not found after load");
+      await page.screenshot({ path: ".session-debug.png", fullPage: false }).catch(() => {});
     }
 
     await page.waitForTimeout(2000);
