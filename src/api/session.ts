@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import { chromium, type BrowserContext } from "playwright";
 import { readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -59,27 +59,24 @@ export async function refreshSession(): Promise<{
 }> {
   logger.info("Launching browser to establish session...");
 
-  let browser: Browser | null = null;
+  const userDataDir = path.join(process.cwd(), ".chrome-profile");
+  let browserContext: BrowserContext | null = null;
   try {
-    browser = await chromium.launch({
+    browserContext = await chromium.launchPersistentContext(userDataDir, {
       headless: false,
       channel: "chrome",
       args: [
         "--disable-blink-features=AutomationControlled",
         "--no-first-run",
         "--no-default-browser-check",
-        `--user-data-dir=${path.join(process.cwd(), ".chrome-profile")}`,
       ],
       ignoreDefaultArgs: ["--enable-automation"],
-    });
-
-    const context: BrowserContext = await browser.newContext({
       locale: "en-US",
       timezoneId: "America/Vancouver",
       viewport: { width: 1920, height: 1080 },
     });
 
-    const page = await context.newPage();
+    const page = await browserContext.newPage();
     await page.addInitScript(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });
@@ -114,7 +111,7 @@ export async function refreshSession(): Promise<{
       logger.warn("API endpoint navigation failed: %s", error);
     }
 
-    const cookies = await context.cookies();
+    const cookies = await browserContext.cookies();
     const userAgent = await page.evaluate(() => navigator.userAgent);
 
     const cache: SessionCache = {
@@ -134,6 +131,6 @@ export async function refreshSession(): Promise<{
     const cookieStr = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
     return { cookies: cookieStr, userAgent };
   } finally {
-    if (browser) await browser.close();
+    if (browserContext) await browserContext.close();
   }
 }
