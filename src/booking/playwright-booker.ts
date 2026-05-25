@@ -8,6 +8,7 @@ export interface BookingOptions {
   bookingUrl: string;
   headless?: boolean;
   timeout?: number;
+  resourceIds?: number[];
 }
 
 export interface BookingResult {
@@ -87,7 +88,7 @@ export async function automateBooking(
 
     // The GoingToCamp UI typically shows available sites with green indicators
     // or clickable site buttons. Try multiple selector strategies.
-    const siteSelected = await trySelectSite(page);
+    const siteSelected = await trySelectSite(page, options.resourceIds);
 
     if (!siteSelected) {
       logger.warn(
@@ -190,16 +191,28 @@ async function waitForQueueIt(page: Page, timeout: number): Promise<void> {
   throw new Error("Queue-It timeout exceeded");
 }
 
-async function trySelectSite(page: Page): Promise<boolean> {
-  // Strategy 1: Click on a green/available site marker on the map
+async function trySelectSite(page: Page, resourceIds?: number[]): Promise<boolean> {
+  // Strategy 1: Click a site marker matching a known-available resource ID
+  if (resourceIds && resourceIds.length > 0) {
+    for (const id of resourceIds) {
+      const selector = `[data-resource-id="${id}"]`;
+      const count = await page.locator(selector).count();
+      if (count > 0) {
+        logger.info("Clicking site marker for resource ID %d", id);
+        await page.locator(selector).first().click();
+        await page.waitForTimeout(1000);
+        return true;
+      }
+    }
+  }
+
+  // Strategy 2: Click on an available site marker (excluding unavailable)
   const availableMarkers = [
-    '[class*="available"]',
-    '[class*="open"]',
+    '[class*="available"]:not([class*="unavailable"])',
+    '.fa-map-marker-check.text-success',
     '[style*="green"]',
-    'button[class*="site"]',
     '[data-available="true"]',
-    ".campsite-available",
-    ".site-marker.available",
+    '[class*="site-available"]',
   ];
 
   for (const selector of availableMarkers) {
@@ -212,7 +225,7 @@ async function trySelectSite(page: Page): Promise<boolean> {
     }
   }
 
-  // Strategy 2: Look for a list view with bookable entries
+  // Strategy 3: Look for a list view with bookable entries
   const listSelectors = [
     'button:has-text("Book")',
     'button:has-text("Reserve")',

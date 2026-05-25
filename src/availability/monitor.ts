@@ -115,6 +115,7 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
             const result = await automateBooking({
               bookingUrl: bookingUrls[0],
               headless: config.autoCartHeadless,
+              resourceIds: newSites.map((s) => s.resourceId),
             });
 
             await notifier.notify({
