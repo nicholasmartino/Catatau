@@ -131,19 +131,14 @@ export async function checkAvailability(options: {
     return [];
   }
 
-  const rootMapId = maps[0].mapId;
-  const transactionLocationId = maps[0]?.mapLinks?.[0]?.transactionLocationId ?? 0;
+  const transactionLocationId = maps
+    .find(m => m.mapLinks?.length > 0)
+    ?.mapLinks?.[0]?.transactionLocationId ?? 0;
   const availableSites: AvailableSite[] = [];
 
-  // Recursive search through map hierarchy
-  const visited = new Set<number>();
-
-  async function searchMap(mapId: number): Promise<void> {
-    if (visited.has(mapId)) return;
-    visited.add(mapId);
-
+  for (const map of maps) {
     const searchParams: AvailabilitySearchParams = {
-      mapId,
+      mapId: map.mapId,
       bookingCategoryId: 0,
       equipmentCategoryId,
       subEquipmentCategoryId,
@@ -166,7 +161,7 @@ export async function checkAvailability(options: {
 
     logger.debug(
       "Searching map %d for campground %s",
-      mapId,
+      map.mapId,
       campground.name,
     );
 
@@ -177,19 +172,18 @@ export async function checkAvailability(options: {
         transactionLocationId,
       );
 
-      // Process direct resource availabilities
       for (const [key, availabilities] of Object.entries(
         response.resourceAvailabilities,
       )) {
         if (availabilities[0]?.availability === 0) {
           availableSites.push({
             resourceId: parseInt(key),
-            mapId,
+            mapId: map.mapId,
             resourceLocationId: campground.id,
             campgroundName: campground.name,
             siteName: `Site ${key}`,
             bookingUrl: buildBookingUrl({
-              mapId,
+              mapId: map.mapId,
               startDate: formatDate(startDate),
               endDate: formatDate(endDate),
               equipmentCategoryId,
@@ -200,24 +194,13 @@ export async function checkAvailability(options: {
           });
         }
       }
-
-      // Follow map links recursively
-      for (const [key, link] of Object.entries(
-        response.mapLinkAvailabilities,
-      )) {
-        if (link.childMapId && link.availability === 0) {
-          await searchMap(link.childMapId);
-        }
-      }
     } catch (error) {
       logger.error(
-        { err: error, mapId, campground: campground.name },
+        { err: error, mapId: map.mapId, campground: campground.name },
         "Failed to search map",
       );
     }
   }
-
-  await searchMap(rootMapId);
 
   logger.info(
     "Found %d available sites at %s (%s to %s)",
