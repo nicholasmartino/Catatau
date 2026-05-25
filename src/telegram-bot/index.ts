@@ -382,6 +382,12 @@ async function executeHunt(
   const partySize = intent.partySize ?? config.defaultPartySize;
   const interval = intent.interval ?? 30;
 
+  const campgrounds = await findCampgrounds(park);
+  if (campgrounds.length === 0) {
+    await sendMessage(chatId, `No campgrounds found matching "${park}". Use /list to see available parks.`);
+    return;
+  }
+
   const id = randomUUID();
   const ac = new AbortController();
   const hunt: ActiveHunt = {
@@ -455,6 +461,12 @@ async function executeMonitor(
   const endDate = parseDate(intent.endDate!);
   const partySize = intent.partySize ?? config.defaultPartySize;
   const interval = intent.interval ?? config.monitorIntervalSeconds;
+
+  const campgrounds = await findCampgrounds(park);
+  if (campgrounds.length === 0) {
+    await sendMessage(chatId, `No campgrounds found matching "${park}". Use /list to see available parks.`);
+    return;
+  }
 
   const id = randomUUID();
   const ac = new AbortController();
