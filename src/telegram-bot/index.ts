@@ -6,6 +6,7 @@ import { startMonitor } from "../availability/monitor.js";
 import { checkAvailability, findCampgrounds, listAllCampgrounds } from "../availability/checker.js";
 import { parseDate } from "../utils/dates.js";
 import { ConversationManager } from "./conversation.js";
+import { loadHunts, saveHunts, addHunt, removeHunt } from "./persistence.js";
 import type { ExtractedIntent } from "../llm/types.js";
 import type { ProcessMessageResult } from "./conversation.js";
 
@@ -300,6 +301,17 @@ async function executeHunt(
   ].join("\n");
   await sendMessage(chatId, confirmMsg);
 
+  addHunt({
+    chatId,
+    command: "hunt",
+    parkName: park,
+    startDate: intent.startDate!,
+    endDate: intent.endDate!,
+    partySize,
+    intervalSeconds: interval,
+    autoCart: true,
+  });
+
   startMonitor({
     parkName: park,
     startDate,
@@ -319,6 +331,7 @@ async function executeHunt(
         currentAbortController = null;
         currentOperation = null;
       }
+      removeHunt();
     });
 }
 
@@ -351,6 +364,17 @@ async function executeMonitor(
   ].join("\n");
   await sendMessage(chatId, confirmMsg);
 
+  addHunt({
+    chatId,
+    command: "monitor",
+    parkName: park,
+    startDate: intent.startDate!,
+    endDate: intent.endDate!,
+    partySize,
+    intervalSeconds: interval,
+    autoCart: false,
+  });
+
   startMonitor({
     parkName: park,
     startDate,
@@ -369,6 +393,7 @@ async function executeMonitor(
         currentAbortController = null;
         currentOperation = null;
       }
+      removeHunt();
     });
 }
 
@@ -490,6 +515,57 @@ export async function startTelegramBot(): Promise<void> {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+
+  // Restore persisted hunts from previous session
+  const savedHunts = loadHunts();
+  const activeHunts = savedHunts.filter(
+    (h) => new Date(h.endDate) >= new Date(),
+  );
+  if (activeHunts.length !== savedHunts.length) {
+    saveHunts(activeHunts);
+  }
+  for (const saved of activeHunts) {
+    const startDate = new Date(saved.startDate);
+    const endDate = new Date(saved.endDate);
+
+    const ac = new AbortController();
+    currentAbortController = ac;
+    currentOperation = `${
+      saved.command === "hunt" ? "Hunting" : "Monitoring"
+    } *${saved.parkName}* (${saved.startDate} -> ${saved.endDate}) - interval ${saved.intervalSeconds}s, party ${saved.partySize}`;
+
+    logger.info("Restoring %s for %s", saved.command, saved.parkName);
+
+    startMonitor({
+      parkName: saved.parkName,
+      startDate,
+      endDate,
+      partySize: saved.partySize,
+      intervalSeconds: saved.intervalSeconds,
+      autoCart: saved.autoCart,
+      signal: ac.signal,
+    })
+      .catch(async (error) => {
+        if (error.name !== "AbortError") {
+          await sendMessage(
+            saved.chatId,
+            `Restored monitor error: ${error.message}`,
+          );
+        }
+      })
+      .finally(() => {
+        if (currentAbortController === ac) {
+          currentAbortController = null;
+          currentOperation = null;
+        }
+        removeHunt();
+      });
+
+    await sendMessage(
+      saved.chatId,
+      `Restored ${saved.command} from previous session:\n${currentOperation}`,
+    );
+  }
 
   logger.info("Telegram bot started. Waiting for messages...");
   let offset = 0;
