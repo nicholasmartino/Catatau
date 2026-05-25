@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createOpencodeServer } from "@opencode-ai/sdk/server";
 import { loadConfig } from "../config/index.js";
 import { logger } from "../utils/logger.js";
@@ -6,15 +7,30 @@ import { startMonitor } from "../availability/monitor.js";
 import { checkAvailability, findCampgrounds, listAllCampgrounds } from "../availability/checker.js";
 import { parseDate } from "../utils/dates.js";
 import { ConversationManager } from "./conversation.js";
-import { loadHunts, saveHunts, addHunt, removeHunt } from "./persistence.js";
-import type { ExtractedIntent } from "../llm/types.js";
+import { loadHunts, saveHunts, addHunt, removeHunts, clearHunts } from "./persistence.js";
+import { extractStopIntent } from "../llm/extractor.js";
+import type { ExtractedIntent, StopIntent } from "../llm/types.js";
 import type { ProcessMessageResult } from "./conversation.js";
 
 const TELEGRAM_API = "https://api.telegram.org";
 
-let currentAbortController: AbortController | null = null;
-let currentOperation: string | null = null;
+interface ActiveHunt {
+  id: string;
+  chatId: number;
+  command: "hunt" | "monitor";
+  parkName: string;
+  startDate: string;
+  endDate: string;
+  partySize: number;
+  intervalSeconds: number;
+  autoCart: boolean;
+  controller: AbortController;
+  startedAt: number;
+}
+
+const activeHunts = new Map<string, ActiveHunt>();
 const conversationManager = new ConversationManager();
+const stopConversations = new Map<number, ActiveHunt[]>();
 
 interface TelegramUpdate {
   update_id: number;
@@ -71,15 +87,90 @@ async function getUpdates(
   return data.result ?? [];
 }
 
-async function handleStop(chatId: number): Promise<void> {
-  if (currentAbortController) {
-    currentAbortController.abort();
-    currentAbortController = null;
-    currentOperation = null;
-    await sendMessage(chatId, "Stopped current operation.");
-  } else {
-    await sendMessage(chatId, "No operation is currently running.");
+function formatHuntList(hunts: ActiveHunt[]): string {
+  return hunts
+    .map((h, i) => {
+      const type = h.command === "hunt" ? "🔍 Hunt" : "👁 Monitor";
+      return `${i + 1}. ${type} — *${h.parkName}* (${h.startDate} → ${h.endDate}) every ${h.intervalSeconds}s`;
+    })
+    .join("\n");
+}
+
+async function stopActiveHunts(ids: string[]): Promise<number> {
+  let count = 0;
+  for (const id of ids) {
+    const hunt = activeHunts.get(id);
+    if (hunt) {
+      hunt.controller.abort();
+      activeHunts.delete(id);
+      count++;
+    }
   }
+  return count;
+}
+
+async function handleStop(chatId: number): Promise<void> {
+  const hunts = Array.from(activeHunts.values());
+  if (hunts.length === 0) {
+    await sendMessage(chatId, "No active hunts or monitors to stop.");
+    return;
+  }
+
+  const list = formatHuntList(hunts);
+  stopConversations.set(chatId, hunts);
+  await sendMessage(
+    chatId,
+    `*Active hunts/monitors:*\n${list}\n\nWhich would you like to stop? (say number, name, or "all")`,
+  );
+}
+
+async function handleStopSelection(
+  chatId: number,
+  text: string,
+  apiUrl: string,
+): Promise<void> {
+  const hunts = stopConversations.get(chatId);
+  if (!hunts) return;
+
+  stopConversations.delete(chatId);
+
+  const huntsList = formatHuntList(hunts);
+  let stopIntent: StopIntent;
+
+  try {
+    stopIntent = await extractStopIntent(text, apiUrl, huntsList);
+  } catch {
+    await sendMessage(chatId, "I couldn't process that. Please try `/stop` again.");
+    return;
+  }
+
+  if (stopIntent.stopAll) {
+    const ids = hunts.map((h) => h.id);
+    const count = await stopActiveHunts(ids);
+    removeHunts(ids);
+    await sendMessage(chatId, `Stopped all ${count} active hunts/monitors.`);
+    return;
+  }
+
+  if (stopIntent.huntIds.length === 0) {
+    await sendMessage(chatId, stopIntent.reply || "No hunts matched. Try again with `/stop`.");
+    return;
+  }
+
+  const ids: string[] = [];
+  for (const displayId of stopIntent.huntIds) {
+    const idx = parseInt(displayId, 10) - 1;
+    const hunt = hunts[idx];
+    if (hunt) ids.push(hunt.id);
+  }
+
+  const count = await stopActiveHunts(ids);
+  if (ids.length > 0) removeHunts(ids);
+
+  await sendMessage(
+    chatId,
+    `Stopped ${count} hunt${count !== 1 ? "s" : ""}.`,
+  );
 }
 
 async function handleList(chatId: number): Promise<void> {
@@ -121,11 +212,14 @@ async function handleList(chatId: number): Promise<void> {
 }
 
 async function handleStatus(chatId: number): Promise<void> {
-  if (currentOperation) {
-    await sendMessage(chatId, `*Active operation:*\n${currentOperation}`);
-  } else {
-    await sendMessage(chatId, "No operation is currently running.");
+  const hunts = Array.from(activeHunts.values());
+  if (hunts.length === 0) {
+    await sendMessage(chatId, "No operations are currently running.");
+    return;
   }
+
+  const list = formatHuntList(hunts);
+  await sendMessage(chatId, `*Active operations (${hunts.length}):*\n${list}`);
 }
 
 async function handleHelp(chatId: number): Promise<void> {
@@ -144,8 +238,8 @@ async function handleHelp(chatId: number): Promise<void> {
       "  *Example:* `/check rathtrevor beach aug 5 to aug 7`",
       "",
       "`/list` - List all reservable campgrounds",
-      "`/stop` - Cancel current operation",
-      "`/status` - Show current operation",
+      "`/stop` - Stop active hunts/monitors",
+      "`/status` - Show active operations",
       "`/help` - Show this message",
     ].join("\n"),
   );
@@ -195,6 +289,7 @@ async function handleCommandMessage(
 
   if (lower === "/stop") {
     conversationManager.delete(chatId);
+    stopConversations.delete(chatId);
     return handleStop(chatId);
   }
   if (lower === "/status") return handleStatus(chatId);
@@ -248,6 +343,10 @@ async function handleCommandMessage(
     return;
   }
 
+  if (stopConversations.has(chatId)) {
+    return handleStopSelection(chatId, trimmed, apiUrl);
+  }
+
   if (conversationManager.has(chatId)) {
     await sendMessage(chatId, "Let me process that...");
     try {
@@ -283,16 +382,27 @@ async function executeHunt(
   const partySize = intent.partySize ?? config.defaultPartySize;
   const interval = intent.interval ?? 30;
 
-  if (currentAbortController) {
-    currentAbortController.abort();
-  }
-
+  const id = randomUUID();
   const ac = new AbortController();
-  currentAbortController = ac;
-  currentOperation = `Hunting *${park}* (${intent.startDate} -> ${intent.endDate}) - interval ${interval}s, party ${partySize}`;
+  const hunt: ActiveHunt = {
+    id,
+    chatId,
+    command: "hunt",
+    parkName: park,
+    startDate: intent.startDate!,
+    endDate: intent.endDate!,
+    partySize,
+    intervalSeconds: interval,
+    autoCart: true,
+    controller: ac,
+    startedAt: Date.now(),
+  };
+  activeHunts.set(id, hunt);
+
+  const displayIdx = Array.from(activeHunts.keys()).indexOf(id) + 1;
 
   const confirmMsg = [
-    `*Hunt started for ${park}!*`,
+    `*Hunt #${displayIdx} started for ${park}!*`,
     `  Date: ${intent.startDate} -> ${intent.endDate}`,
     `  Party size: ${partySize}`,
     `  Checking every ${interval}s with auto-cart enabled`,
@@ -302,6 +412,7 @@ async function executeHunt(
   await sendMessage(chatId, confirmMsg);
 
   addHunt({
+    id,
     chatId,
     command: "hunt",
     parkName: park,
@@ -327,11 +438,10 @@ async function executeHunt(
       }
     })
     .finally(() => {
-      if (currentAbortController === ac) {
-        currentAbortController = null;
-        currentOperation = null;
+      if (activeHunts.get(id)?.controller === ac) {
+        activeHunts.delete(id);
+        removeHunts([id]);
       }
-      removeHunt();
     });
 }
 
@@ -346,16 +456,27 @@ async function executeMonitor(
   const partySize = intent.partySize ?? config.defaultPartySize;
   const interval = intent.interval ?? config.monitorIntervalSeconds;
 
-  if (currentAbortController) {
-    currentAbortController.abort();
-  }
-
+  const id = randomUUID();
   const ac = new AbortController();
-  currentAbortController = ac;
-  currentOperation = `Monitoring *${park}* (${intent.startDate} -> ${intent.endDate}) - interval ${interval}s, party ${partySize}`;
+  const hunt: ActiveHunt = {
+    id,
+    chatId,
+    command: "monitor",
+    parkName: park,
+    startDate: intent.startDate!,
+    endDate: intent.endDate!,
+    partySize,
+    intervalSeconds: interval,
+    autoCart: false,
+    controller: ac,
+    startedAt: Date.now(),
+  };
+  activeHunts.set(id, hunt);
+
+  const displayIdx = Array.from(activeHunts.keys()).indexOf(id) + 1;
 
   const confirmMsg = [
-    `*Monitoring started for ${park}!*`,
+    `*Monitor #${displayIdx} started for ${park}!*`,
     `  Date: ${intent.startDate} -> ${intent.endDate}`,
     `  Party size: ${partySize}`,
     `  Checking every ${interval}s`,
@@ -365,6 +486,7 @@ async function executeMonitor(
   await sendMessage(chatId, confirmMsg);
 
   addHunt({
+    id,
     chatId,
     command: "monitor",
     parkName: park,
@@ -389,11 +511,10 @@ async function executeMonitor(
       }
     })
     .finally(() => {
-      if (currentAbortController === ac) {
-        currentAbortController = null;
-        currentOperation = null;
+      if (activeHunts.get(id)?.controller === ac) {
+        activeHunts.delete(id);
+        removeHunts([id]);
       }
-      removeHunt();
     });
 }
 
@@ -508,7 +629,9 @@ export async function startTelegramBot(): Promise<void> {
 
   const shutdown = () => {
     logger.info("Shutting down...");
-    if (currentAbortController) currentAbortController.abort();
+    for (const hunt of activeHunts.values()) {
+      hunt.controller.abort();
+    }
     opencodeServer?.close();
     process.exit(0);
   };
@@ -518,21 +641,35 @@ export async function startTelegramBot(): Promise<void> {
 
   // Restore persisted hunts from previous session
   const savedHunts = loadHunts();
-  const activeHunts = savedHunts.filter(
+  const expiredHunts = savedHunts.filter(
+    (h) => new Date(h.endDate) < new Date(),
+  );
+  const activePersisted = savedHunts.filter(
     (h) => new Date(h.endDate) >= new Date(),
   );
-  if (activeHunts.length !== savedHunts.length) {
-    saveHunts(activeHunts);
+  if (expiredHunts.length > 0) {
+    saveHunts(activePersisted);
   }
-  for (const saved of activeHunts) {
+
+  for (const saved of activePersisted) {
     const startDate = new Date(saved.startDate);
     const endDate = new Date(saved.endDate);
 
     const ac = new AbortController();
-    currentAbortController = ac;
-    currentOperation = `${
-      saved.command === "hunt" ? "Hunting" : "Monitoring"
-    } *${saved.parkName}* (${saved.startDate} -> ${saved.endDate}) - interval ${saved.intervalSeconds}s, party ${saved.partySize}`;
+    const hunt: ActiveHunt = {
+      id: saved.id,
+      chatId: saved.chatId,
+      command: saved.command,
+      parkName: saved.parkName,
+      startDate: saved.startDate,
+      endDate: saved.endDate,
+      partySize: saved.partySize,
+      intervalSeconds: saved.intervalSeconds,
+      autoCart: saved.autoCart,
+      controller: ac,
+      startedAt: Date.now(),
+    };
+    activeHunts.set(hunt.id, hunt);
 
     logger.info("Restoring %s for %s", saved.command, saved.parkName);
 
@@ -554,16 +691,15 @@ export async function startTelegramBot(): Promise<void> {
         }
       })
       .finally(() => {
-        if (currentAbortController === ac) {
-          currentAbortController = null;
-          currentOperation = null;
+        if (activeHunts.get(hunt.id)?.controller === ac) {
+          activeHunts.delete(hunt.id);
+          removeHunts([hunt.id]);
         }
-        removeHunt();
       });
 
     await sendMessage(
       saved.chatId,
-      `Restored ${saved.command} from previous session:\n${currentOperation}`,
+      `Restored ${saved.command} from previous session:\n${saved.parkName} (${saved.startDate} -> ${saved.endDate})`,
     );
   }
 

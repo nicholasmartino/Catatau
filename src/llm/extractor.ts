@@ -1,5 +1,5 @@
 import { logger } from "../utils/logger.js";
-import type { ExtractedIntent } from "./types.js";
+import type { ExtractedIntent, StopIntent } from "./types.js";
 
 const SYSTEM_PROMPT = `You are a camping reservation assistant for BC Parks. Help the user plan their trip by having a natural conversation.
 
@@ -86,6 +86,43 @@ async function apiFetch(
   return response.json();
 }
 
+async function callLlm(
+  apiUrl: string,
+  system: string,
+  text: string,
+  title: string,
+): Promise<string | null> {
+  const session = await apiFetch(apiUrl, "/session", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  }) as { id: string };
+
+  try {
+    const result = await apiFetch(apiUrl, `/session/${session.id}/message`, {
+      method: "POST",
+      body: JSON.stringify({
+        system,
+        parts: [{ type: "text", text }],
+      }),
+    }) as {
+      info: { error?: { data?: { message?: string } }; tokens?: { input: number; output: number } };
+      parts: Array<{ type: string; text?: string }>;
+    };
+
+    if (result.info?.error) {
+      logger.error({ error: result.info.error }, "LLM API error");
+      return null;
+    }
+
+    logger.info({ tokens: result.info?.tokens }, "LLM call complete");
+    return result.parts?.find(p => p.type === "text")?.text ?? null;
+  } finally {
+    await apiFetch(apiUrl, `/session/${session.id}`, {
+      method: "DELETE",
+    }).catch(() => {});
+  }
+}
+
 export async function extractIntent(
   text: string,
   apiUrl: string,
@@ -117,41 +154,64 @@ export async function extractIntent(
     ].join("\n");
   }
 
-  const session = await apiFetch(apiUrl, "/session", {
-    method: "POST",
-    body: JSON.stringify({ title: "Intent Extraction" }),
-  }) as { id: string };
-
-  try {
-    const result = await apiFetch(apiUrl, `/session/${session.id}/message`, {
-      method: "POST",
-      body: JSON.stringify({
-        system,
-        parts: [{ type: "text", text }],
-      }),
-    }) as {
-      info: { error?: { data?: { message?: string } }; tokens?: { input: number; output: number } };
-      parts: Array<{ type: string; text?: string }>;
-    };
-
-    if (result.info?.error) {
-      logger.error({ error: result.info.error }, "LLM API error");
-      return { reply: "I ran into an issue processing that. Could you try rephrasing?" };
-    }
-
-    const rawText = result.parts?.find(p => p.type === "text")?.text ?? "";
-    const parsed = parseJsonFromText(rawText);
-    const intent: ExtractedIntent = (parsed as ExtractedIntent) ?? {};
-
-    if (!intent.reply) {
-      intent.reply = rawText.slice(0, 500);
-    }
-
-    logger.info({ intent, tokens: result.info?.tokens }, "Extracted intent");
-    return intent;
-  } finally {
-    await apiFetch(apiUrl, `/session/${session.id}`, {
-      method: "DELETE",
-    }).catch(() => {});
+  const rawText = await callLlm(apiUrl, system, text, "Intent Extraction");
+  if (!rawText) {
+    return { reply: "I ran into an issue processing that. Could you try rephrasing?" };
   }
+
+  const parsed = parseJsonFromText(rawText);
+  const intent: ExtractedIntent = (parsed as ExtractedIntent) ?? {};
+
+  if (!intent.reply) {
+    intent.reply = rawText.slice(0, 500);
+  }
+
+  return intent;
+}
+
+const STOP_PROMPT = `You are helping decide which active hunts or monitors to stop.
+
+You MUST respond with ONLY a valid JSON object. No other text before or after.
+
+The JSON object must have this exact schema:
+{
+  "reply": "<your response to the user>",
+  "huntIds": ["<list of hunt display numbers to stop>"],
+  "stopAll": <true if user wants to stop all, otherwise false>
+}
+
+Rules:
+- If the user says things like "all", "everything", "stop all" → set stopAll to true and huntIds to empty array
+- If the user mentions specific hunts (by number like "1", "3" or by name like "golden ears"), set huntIds to their display numbers
+- If the user mentions both specific hunts and also "the rest" or "others", include the specific ones AND the remaining ones
+- "reply" is REQUIRED. Keep it concise.
+- If unsure, set huntIds to empty array and explain why in reply.
+
+OUTPUT ONLY JSON. DO NOT include any text outside the JSON object.`;
+
+export async function extractStopIntent(
+  text: string,
+  apiUrl: string,
+  huntsList: string,
+): Promise<StopIntent> {
+  const system = [
+    STOP_PROMPT,
+    "",
+    `Active hunts:\n${huntsList}`,
+  ].join("\n");
+
+  const rawText = await callLlm(apiUrl, system, text, "Stop Intent");
+  if (!rawText) {
+    return { reply: "I couldn't process that. Please try again.", huntIds: [], stopAll: false };
+  }
+
+  const parsed = parseJsonFromText(rawText);
+  const intent: StopIntent = {
+    reply: "Okay, stopping selected hunts.",
+    huntIds: [],
+    stopAll: false,
+    ...(parsed as Partial<StopIntent>),
+  };
+
+  return intent;
 }

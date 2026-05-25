@@ -4,6 +4,7 @@ import { logger } from "../utils/logger.js";
 const STATE_PATH = "hunts.json";
 
 export interface PersistedHunt {
+  id: string;
   chatId: number;
   command: "hunt" | "monitor";
   parkName: string;
@@ -33,9 +34,17 @@ export function saveHunts(hunts: PersistedHunt[]): void {
 }
 
 export function addHunt(hunt: PersistedHunt): void {
-  saveHunts([hunt]);
+  const hunts = loadHunts();
+  hunts.push(hunt);
+  saveHunts(hunts);
 }
 
-export function removeHunt(): void {
+export function removeHunts(ids: string[]): void {
+  const idSet = new Set(ids);
+  const hunts = loadHunts().filter((h) => !idSet.has(h.id));
+  saveHunts(hunts);
+}
+
+export function clearHunts(): void {
   saveHunts([]);
 }

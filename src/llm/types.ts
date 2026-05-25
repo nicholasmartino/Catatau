@@ -1,4 +1,4 @@
-export type BotCommand = "hunt" | "monitor" | "check" | "snatch";
+export type BotCommand = "hunt" | "monitor" | "check" | "snatch" | "stop";
 
 export interface ExtractedIntent {
   reply?: string;
@@ -8,4 +8,10 @@ export interface ExtractedIntent {
   nights?: number;
   partySize?: number;
   interval?: number;
+}
+
+export interface StopIntent {
+  reply: string;
+  huntIds: string[];
+  stopAll: boolean;
 }
