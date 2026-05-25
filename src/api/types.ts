@@ -31,10 +31,8 @@ export const campgroundMapSchema = z.object({
 });
 
 export const resourceAvailabilitySchema = z.object({
-  resourceId: z.number(),
   availability: z.number(),
-  bookingCategoryId: z.number().optional(),
-  mapId: z.number().optional(),
+  remainingQuota: z.number().nullable(),
 });
 
 export const mapLinkAvailabilitySchema = z.object({
@@ -44,8 +42,10 @@ export const mapLinkAvailabilitySchema = z.object({
 });
 
 export const availabilityResponseSchema = z.object({
-  resourceAvailabilities: z.record(z.string(), resourceAvailabilitySchema).default({}),
-  mapLinkAvailabilities: z.record(z.string(), mapLinkAvailabilitySchema).default({}),
+  mapId: z.number(),
+  mapAvailabilities: z.array(z.number()),
+  resourceAvailabilities: z.record(z.string(), z.array(resourceAvailabilitySchema)),
+  mapLinkAvailabilities: z.record(z.string(), z.any()).default({}),
 });
 
 export const equipmentCategorySchema = z.object({

@@ -1,16 +1,23 @@
 export interface AvailabilitySearchParams {
   mapId: number;
-  resourceLocationId: number;
   bookingCategoryId: number;
+  equipmentCategoryId: number;
+  subEquipmentCategoryId?: number;
+  cartUid: string;
+  cartTransactionUid: string;
+  bookingUid: string;
+  groupHoldUid: string;
   startDate: string;
   endDate: string;
-  isReserving: boolean;
   getDailyAvailability: boolean;
-  partySize: number;
+  isReserving: boolean;
+  filterData: string;
+  boatLength: number;
+  boatDraft: number;
+  boatWidth: number;
+  peopleCapacityCategoryCounts: string;
   numEquipment: number;
-  equipmentCategoryId: number;
-  filterData: unknown[];
-  subEquipmentCategoryId?: number;
+  seed: string;
 }
 
 export interface AvailabilityResponse {
@@ -20,10 +27,9 @@ export interface AvailabilityResponse {
 
 export interface ResourceAvailability {
   resourceId: number;
-  availability: number; // 0 = available
+  availability: number;
   bookingCategoryId: number;
   mapId: number;
-  resourceLocationLocalizedValues?: { en: string };
 }
 
 export interface MapLinkAvailability {
@@ -43,7 +49,7 @@ export interface AvailableSite {
 
 export interface DailyAvailability {
   resourceId: number;
-  availability: Record<string, number>; // date -> availability code
+  availability: Record<string, number>;
 }
 
 export interface MonitorResult {
@@ -52,5 +58,5 @@ export interface MonitorResult {
   startDate: string;
   endDate: string;
   availableSites: AvailableSite[];
-  newSites: AvailableSite[]; // sites that became available since last check
+  newSites: AvailableSite[];
 }

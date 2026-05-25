@@ -32,6 +32,7 @@ export interface ApiRequestOptions {
   method?: "GET" | "POST";
   params?: Record<string, string | number | boolean>;
   body?: unknown;
+  headers?: Record<string, string>;
   skipSession?: boolean;
 }
 
@@ -58,27 +59,28 @@ export async function apiRequest<T>(
         }
       }
 
-      const headers: Record<string, string> = {
+      const allHeaders: Record<string, string> = {
         Accept: "application/json",
         "Accept-Language": "en-US,en;q=0.9",
         Referer: `${BCPARKS_BASE_URL}/`,
         Origin: BCPARKS_BASE_URL,
+        ...options.headers,
       };
 
       if (session) {
-        headers["Cookie"] = session.cookies;
-        headers["User-Agent"] = session.userAgent;
+        allHeaders["Cookie"] = session.cookies;
+        allHeaders["User-Agent"] = session.userAgent;
       }
 
       if (body) {
-        headers["Content-Type"] = "application/json";
+        allHeaders["Content-Type"] = "application/json";
       }
 
       logger.debug({ method, url: url.toString() }, "API request");
 
       const response = await fetch(url.toString(), {
         method,
-        headers,
+        headers: allHeaders,
         body: body ? JSON.stringify(body) : undefined,
       });
 

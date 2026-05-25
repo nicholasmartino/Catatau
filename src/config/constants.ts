@@ -20,6 +20,7 @@ export const RESOURCE_CATEGORIES = {
 
 export const EQUIPMENT_CATEGORIES = {
   NON_GROUP_EQUIPMENT: -32768,
+  NON_GROUP_SUB_EQUIPMENT: -32767,
 } as const;
 
 export const RESERVABLE_CATEGORY_IDS = new Set<number>([

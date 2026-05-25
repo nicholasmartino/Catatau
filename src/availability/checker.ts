@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   listCampgrounds,
   getMaps,
@@ -9,7 +10,7 @@ import {
   BCPARKS_BASE_URL,
 } from "../config/constants.js";
 import { loadConfig } from "../config/index.js";
-import { formatDateForApi, formatDate } from "../utils/dates.js";
+import { formatDate } from "../utils/dates.js";
 import { logger } from "../utils/logger.js";
 import type {
   AvailableSite,
@@ -120,7 +121,7 @@ export async function checkAvailability(options: {
     endDate,
     partySize = config.defaultPartySize,
     equipmentCategoryId = EQUIPMENT_CATEGORIES.NON_GROUP_EQUIPMENT,
-    subEquipmentCategoryId,
+    subEquipmentCategoryId = EQUIPMENT_CATEGORIES.NON_GROUP_SUB_EQUIPMENT,
   } = options;
 
   // Get maps for this campground to find mapId
@@ -131,6 +132,7 @@ export async function checkAvailability(options: {
   }
 
   const rootMapId = maps[0].mapId;
+  const transactionLocationId = maps[0]?.mapLinks?.[0]?.transactionLocationId ?? 0;
   const availableSites: AvailableSite[] = [];
 
   // Recursive search through map hierarchy
@@ -142,19 +144,24 @@ export async function checkAvailability(options: {
 
     const searchParams: AvailabilitySearchParams = {
       mapId,
-      resourceLocationId: campground.id,
       bookingCategoryId: 0,
-      startDate: formatDateForApi(startDate),
-      endDate: formatDateForApi(endDate),
-      isReserving: true,
-      getDailyAvailability: false,
-      partySize,
-      numEquipment: 1,
       equipmentCategoryId,
-      filterData: [],
-      ...(subEquipmentCategoryId !== undefined && {
-        subEquipmentCategoryId,
-      }),
+      subEquipmentCategoryId,
+      cartUid: randomUUID(),
+      cartTransactionUid: randomUUID(),
+      bookingUid: randomUUID(),
+      groupHoldUid: "",
+      startDate: formatDate(startDate),
+      endDate: formatDate(endDate),
+      getDailyAvailability: false,
+      isReserving: true,
+      filterData: "[]",
+      boatLength: 0,
+      boatDraft: 0,
+      boatWidth: 0,
+      peopleCapacityCategoryCounts: "[]",
+      numEquipment: 0,
+      seed: new Date().toISOString(),
     };
 
     logger.debug(
@@ -164,19 +171,23 @@ export async function checkAvailability(options: {
     );
 
     try {
-      const response = await searchAvailability(searchParams);
+      const response = await searchAvailability(
+        searchParams,
+        campground.id,
+        transactionLocationId,
+      );
 
       // Process direct resource availabilities
-      for (const [key, resource] of Object.entries(
+      for (const [key, availabilities] of Object.entries(
         response.resourceAvailabilities,
       )) {
-        if (resource.availability === 0) {
+        if (availabilities[0]?.availability === 0) {
           availableSites.push({
-            resourceId: resource.resourceId,
+            resourceId: parseInt(key),
             mapId,
             resourceLocationId: campground.id,
             campgroundName: campground.name,
-            siteName: `Site ${resource.resourceId}`,
+            siteName: `Site ${key}`,
             bookingUrl: buildBookingUrl({
               mapId,
               startDate: formatDate(startDate),
