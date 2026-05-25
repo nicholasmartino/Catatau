@@ -2,6 +2,7 @@ import { chromium, type Browser, type Page } from "playwright";
 import { loadConfig } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import { BCPARKS_BASE_URL } from "../config/constants.js";
+import { loginToBCParks } from "./login.js";
 
 export interface BookingOptions {
   bookingUrl: string;
@@ -53,11 +54,18 @@ export async function automateBooking(
 
     const page = await context.newPage();
 
-    // Step 1: Navigate to booking URL
+    // Step 1: Log in to BC Parks if credentials configured
+    const loginResult = await loginToBCParks();
+    if (loginResult) {
+      logger.info("Injecting auth cookies into browser context...");
+      await context.addCookies(loginResult.cookies);
+    }
+
+    // Step 3: Navigate to booking URL
     logger.info("Navigating to booking page...");
     await page.goto(bookingUrl, { waitUntil: "networkidle", timeout: 60000 });
 
-    // Step 2: Check for Queue-It
+    // Step 4: Check for Queue-It
     const isQueueIt = await detectQueueIt(page);
     if (isQueueIt) {
       logger.info("Queue-It waiting room detected. Waiting for queue...");
@@ -65,7 +73,7 @@ export async function automateBooking(
       logger.info("Through the queue!");
     }
 
-    // Step 3: Wait for search results to load
+    // Step 5: Wait for search results to load
     logger.info("Waiting for search results...");
     await page.waitForSelector(
       '[class*="resource"], [class*="site"], [class*="result"], [class*="available"]',
@@ -74,7 +82,7 @@ export async function automateBooking(
       logger.warn("Could not detect standard result selectors, continuing...");
     });
 
-    // Step 4: Try to select first available site
+    // Step 6: Try to select first available site
     logger.info("Looking for available sites...");
 
     // The GoingToCamp UI typically shows available sites with green indicators
@@ -103,7 +111,7 @@ export async function automateBooking(
       };
     }
 
-    // Step 5: Click book/reserve button
+    // Step 7: Click book/reserve button
     logger.info("Attempting to add site to booking...");
     const booked = await tryBookSite(page);
 

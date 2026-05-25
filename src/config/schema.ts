@@ -46,6 +46,9 @@ export const configSchema = z.object({
     .number()
     .default(-32768),
 
+  bcParksEmail: z.string().optional(),
+  bcParksPassword: z.string().optional(),
+
   opencodeApiUrl: z.string().optional(),
 });
 

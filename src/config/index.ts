@@ -27,6 +27,8 @@ export function loadConfig(): AppConfig {
     bookingHeadless: process.env.BOOKING_HEADLESS,
     defaultPartySize: process.env.DEFAULT_PARTY_SIZE,
     defaultEquipmentCategoryId: process.env.DEFAULT_EQUIPMENT_CATEGORY_ID,
+    bcParksEmail: process.env.BC_PARKS_EMAIL,
+    bcParksPassword: process.env.BC_PARKS_PASSWORD,
     opencodeApiUrl: process.env.OPENCODE_API_URL,
   };
 
