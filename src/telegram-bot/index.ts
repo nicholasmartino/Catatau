@@ -664,8 +664,8 @@ export async function startTelegramBot(): Promise<void> {
   }
 
   for (const saved of activePersisted) {
-    const startDate = new Date(saved.startDate);
-    const endDate = new Date(saved.endDate);
+    const startDate = parseDate(saved.startDate);
+    const endDate = parseDate(saved.endDate);
 
     const ac = new AbortController();
     const hunt: ActiveHunt = {
