@@ -1,7 +1,10 @@
+import { format } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { checkAvailability, findCampgrounds } from "./checker.js";
 import { NotificationManager } from "../notifications/manager.js";
 import { loadConfig } from "../config/index.js";
-import { formatDate } from "../utils/dates.js";
+import { formatDate, getReleaseTime } from "../utils/dates.js";
+import { PACIFIC_TIMEZONE } from "../config/constants.js";
 import { sleep } from "../utils/sleep.js";
 import { logger } from "../utils/logger.js";
 import { automateBooking } from "../booking/playwright-booker.js";
@@ -17,6 +20,7 @@ export interface MonitorOptions {
   maxChecks?: number; // 0 = unlimited
   autoCart?: boolean; // auto-add to cart via Playwright
   signal?: AbortSignal; // optional abort signal for cancellation
+  controller?: AbortController; // allows monitor to self-abort after cart success
 }
 
 /**
@@ -46,6 +50,21 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
   if (campgrounds.length === 0) {
     logger.error('No campgrounds found matching "%s"', parkName);
     return;
+  }
+
+  const releaseTime = getReleaseTime(startDate);
+  const msToRelease = releaseTime.getTime() - Date.now();
+
+  if (msToRelease > 0) {
+    const releasePacific = toZonedTime(releaseTime, PACIFIC_TIMEZONE);
+    const timeStr = `${format(releasePacific, "yyyy-MM-dd HH:mm:ss")} Pacific`;
+    logger.info(
+      "Waiting for release on %s (%d seconds from now)...",
+      timeStr,
+      Math.round(msToRelease / 1000),
+    );
+    if (signal?.aborted) return;
+    await sleep(msToRelease);
   }
 
   logger.info(
@@ -131,6 +150,12 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
               startDate: formatDate(startDate),
               endDate: formatDate(endDate),
             });
+
+            if (result.success) {
+              logger.info("Site added to cart, stopping monitor");
+              options.controller?.abort();
+              break;
+            }
           }
         } else if (sites.length > 0) {
           logger.info(
@@ -155,9 +180,7 @@ export async function startMonitor(options: MonitorOptions): Promise<void> {
       }
     }
 
-    if (cartLaunched) {
-      logger.info("Auto-cart launched. Monitor will continue watching for more sites.");
-    }
+    if (signal?.aborted) break;
 
     if (maxChecks !== 0 && checkCount >= maxChecks) break;
 

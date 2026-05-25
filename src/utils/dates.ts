@@ -1,4 +1,4 @@
-import { addMonths, format, parse, startOfDay } from "date-fns";
+import { addMonths, format, parse, startOfDay, subMonths } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import {
   PACIFIC_TIMEZONE,
@@ -38,6 +38,31 @@ export function getNextReleaseDate(): Date {
   const tomorrow = new Date(nowPacific());
   tomorrow.setDate(tomorrow.getDate() + 1);
   return addMonths(startOfDay(tomorrow), BOOKING_WINDOW_MONTHS);
+}
+
+/**
+ * Get the UTC Date when a camping start date becomes bookable:
+ * 7 AM Pacific, 3 calendar months before the first night.
+ */
+export function getReleaseTime(campingStartDate: Date): Date {
+  const dateStr = format(campingStartDate, "yyyy-MM-dd");
+  const d = parse(dateStr, "yyyy-MM-dd", new Date());
+  const releaseDate = subMonths(d, BOOKING_WINDOW_MONTHS);
+  const releaseStr = format(releaseDate, "yyyy-MM-dd");
+  const wallClock = parse(
+    `${releaseStr} ${String(RELEASE_HOUR).padStart(2, "0")}:00`,
+    "yyyy-MM-dd HH:mm",
+    new Date(),
+  );
+  return fromZonedTime(wallClock, PACIFIC_TIMEZONE);
+}
+
+/**
+ * Whether the release time for a camping start date has passed
+ * (i.e., the date is currently bookable).
+ */
+export function isPastRelease(campingStartDate: Date): boolean {
+  return getReleaseTime(campingStartDate) <= new Date();
 }
 
 /**

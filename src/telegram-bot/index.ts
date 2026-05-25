@@ -5,7 +5,7 @@ import { logger } from "../utils/logger.js";
 import { sleep } from "../utils/sleep.js";
 import { startMonitor } from "../availability/monitor.js";
 import { checkAvailability, findCampgrounds, listAllCampgrounds } from "../availability/checker.js";
-import { parseDate } from "../utils/dates.js";
+import { parseDate, isPastRelease, getReleaseTime, formatDate as fmtDate } from "../utils/dates.js";
 import { ConversationManager } from "./conversation.js";
 import { loadHunts, saveHunts, addHunt, removeHunts, clearHunts } from "./persistence.js";
 import { extractStopIntent } from "../llm/extractor.js";
@@ -382,6 +382,15 @@ async function executeHunt(
   const partySize = intent.partySize ?? config.defaultPartySize;
   const interval = intent.interval ?? 30;
 
+  if (!isPastRelease(startDate)) {
+    const release = getReleaseTime(startDate);
+    await sendMessage(
+      chatId,
+      `This date isn't bookable yet (opens on ${fmtDate(release)} at 7 AM Pacific). Use /monitor to wait for the release.`,
+    );
+    return;
+  }
+
   const campgrounds = await findCampgrounds(park);
   if (campgrounds.length === 0) {
     await sendMessage(chatId, `No campgrounds found matching "${park}". Use /list to see available parks.`);
@@ -437,6 +446,7 @@ async function executeHunt(
     intervalSeconds: interval,
     autoCart: true,
     signal: ac.signal,
+    controller: ac,
   })
     .catch(async (error) => {
       if (error.name !== "AbortError") {
@@ -462,6 +472,14 @@ async function executeMonitor(
   const partySize = intent.partySize ?? config.defaultPartySize;
   const interval = intent.interval ?? config.monitorIntervalSeconds;
 
+  if (isPastRelease(startDate)) {
+    await sendMessage(
+      chatId,
+      "This date is already available for booking. Use /hunt to search for cancellations.",
+    );
+    return;
+  }
+
   const campgrounds = await findCampgrounds(park);
   if (campgrounds.length === 0) {
     await sendMessage(chatId, `No campgrounds found matching "${park}". Use /list to see available parks.`);
@@ -479,7 +497,7 @@ async function executeMonitor(
     endDate: intent.endDate!,
     partySize,
     intervalSeconds: interval,
-    autoCart: false,
+    autoCart: true,
     controller: ac,
     startedAt: Date.now(),
   };
@@ -491,7 +509,7 @@ async function executeMonitor(
     `*Monitor #${displayIdx} started for ${park}!*`,
     `  Date: ${intent.startDate} -> ${intent.endDate}`,
     `  Party size: ${partySize}`,
-    `  Checking every ${interval}s`,
+    `  Auto-cart enabled: will book at release`,
     "",
     "_You'll be notified here when sites are found._",
   ].join("\n");
@@ -506,7 +524,7 @@ async function executeMonitor(
     endDate: intent.endDate!,
     partySize,
     intervalSeconds: interval,
-    autoCart: false,
+    autoCart: true,
   });
 
   startMonitor({
@@ -516,6 +534,7 @@ async function executeMonitor(
     partySize,
     intervalSeconds: interval,
     signal: ac.signal,
+    controller: ac,
   })
     .catch(async (error) => {
       if (error.name !== "AbortError") {
@@ -693,6 +712,7 @@ export async function startTelegramBot(): Promise<void> {
       intervalSeconds: saved.intervalSeconds,
       autoCart: saved.autoCart,
       signal: ac.signal,
+      controller: ac,
     })
       .catch(async (error) => {
         if (error.name !== "AbortError") {
