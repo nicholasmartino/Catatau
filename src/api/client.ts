@@ -101,7 +101,7 @@ export async function apiRequest<T>(
       maxRetries: 3,
       baseDelayMs: 1000,
       onRetry: (error, attempt) => {
-        logger.warn({ error, attempt }, "Retrying API request");
+        logger.warn({ err: error, attempt }, "Retrying API request");
       },
     },
   );

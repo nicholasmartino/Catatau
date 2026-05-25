@@ -200,7 +200,7 @@ export async function checkAvailability(options: {
       }
     } catch (error) {
       logger.error(
-        { error, mapId, campground: campground.name },
+        { err: error, mapId, campground: campground.name },
         "Failed to search map",
       );
     }
