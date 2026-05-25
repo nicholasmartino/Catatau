@@ -34,7 +34,7 @@ export async function findCampgrounds(
   return locations
     .filter((loc) => {
       const name = getEnglishName(loc).toLowerCase();
-      return name.includes(term);
+      return name.includes(term) || term.includes(name);
     })
     .filter((loc) =>
       loc.resourceCategoryIds.some((id) => RESERVABLE_CATEGORY_IDS.has(id)),
