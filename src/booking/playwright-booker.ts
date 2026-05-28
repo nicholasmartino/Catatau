@@ -191,7 +191,7 @@ async function waitForQueueIt(page: Page, timeout: number): Promise<void> {
   throw new Error("Queue-It timeout exceeded");
 }
 
-async function trySelectSite(page: Page, resourceIds?: number[]): Promise<boolean> {
+export async function trySelectSite(page: Page, resourceIds?: number[]): Promise<boolean> {
   // Strategy 1: Click a site marker matching a known-available resource ID
   if (resourceIds && resourceIds.length > 0) {
     for (const id of resourceIds) {
@@ -246,7 +246,7 @@ async function trySelectSite(page: Page, resourceIds?: number[]): Promise<boolea
   return false;
 }
 
-async function tryBookSite(page: Page): Promise<boolean> {
+export async function tryBookSite(page: Page): Promise<boolean> {
   const bookSelectors = [
     'button:has-text("Add to Stay")',
     'button:has-text("Book Now")',

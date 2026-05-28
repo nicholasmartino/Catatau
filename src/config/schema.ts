@@ -35,6 +35,7 @@ export const configSchema = z.object({
     .enum(["true", "false"])
     .transform((v) => v === "true")
     .default("false"),
+  autoCartPreWarmMinutes: z.coerce.number().min(0).default(2),
 
   bookingHeadless: z
     .enum(["true", "false"])
