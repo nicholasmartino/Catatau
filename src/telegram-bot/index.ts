@@ -718,14 +718,13 @@ export async function startTelegramBot(): Promise<void> {
         if (error.name !== "AbortError") {
           await sendMessage(
             saved.chatId,
-            `Restored monitor error: ${error.message}`,
+            `Restored ${saved.command} errored: ${error.message} — will retry on next restart`,
           );
         }
       })
       .finally(() => {
         if (activeHunts.get(hunt.id)?.controller === ac) {
           activeHunts.delete(hunt.id);
-          removeHunts([hunt.id]);
         }
       });
 
@@ -733,6 +732,9 @@ export async function startTelegramBot(): Promise<void> {
       saved.chatId,
       `Restored ${saved.command} from previous session:\n${saved.parkName} (${saved.startDate} -> ${saved.endDate})`,
     );
+
+    // Stagger restores to avoid bursting the API with concurrent requests
+    await sleep(3000);
   }
 
   logger.info("Telegram bot started. Waiting for messages...");
